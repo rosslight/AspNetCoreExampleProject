@@ -1,0 +1,130 @@
+﻿name: Build, test, publish
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  # Application-specific settings
+  BASE_NAME: "AspNetCoreExampleProject"
+  SOLUTION_NAME: "AspNetCoreExampleProject.slnx"
+  PROJECT_PATH: "src/AspNetCoreExampleProject.Client/AspNetCoreExampleProject.Client.csproj"
+  # Workflow-specific settings. Only change if there are conflicting filepaths
+  ARTIFACT_PATH_EXE: "./publish_exe"
+
+jobs:
+  build_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+
+      - name: Restore dependencies and build solution
+        run: dotnet build ${{ env.SOLUTION_NAME }} --configuration Release /p:TreatWarningsAsErrors=true
+      - name: Test
+        run: dotnet test ${{ env.SOLUTION_NAME }} --no-build --configuration Release
+      - name: Upload Test Results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-test-results
+          path: |
+            **/*.received.*
+
+      - name: Check formatting using csharpier
+        run: |
+          dotnet tool restore
+          dotnet csharpier check .
+
+  get_semantic_release_version:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: rosslight/reusable-actions/.github/workflows/get-semantic-release-version.yml@v2.0.2
+
+  publish_exe:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.get_semantic_release_version.outputs.new_release_published == 'true'
+    # Using windows as Cross-OS native compilation is not supported
+    # Ubuntu can be used if <PublishAot> is false. If compiling for windows, make sure to set '/p:EnableWindowsTargeting=true'
+    runs-on: windows-2025-vs2026
+    needs: [get_semantic_release_version]
+    outputs:
+      cache_key: ${{ steps.publish.outputs.cache_key }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rosslight/reusable-actions/publish-exe@v2.0.0
+        id: publish
+        with:
+          project_path: ${{ env.PROJECT_PATH }}
+          dotnet_build_args: '-r win-x64'
+          release_version: ${{ needs.get_semantic_release_version.outputs.new_release_version }}
+          artifact_directory: ${{ env.ARTIFACT_PATH_EXE }}
+          dotnet_publish_args: '-r win-x64'
+          file_name: '${{ env.BASE_NAME }}_${{ needs.get_semantic_release_version.outputs.new_release_version }}_x64'
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.get_semantic_release_version.outputs.new_release_published == 'true'
+    runs-on: ubuntu-24.04
+    name: Create release
+    needs: [ build_test, publish_exe ]
+    env:
+      PUBLISH_PATH: './publish'
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Load cached exe
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.ARTIFACT_PATH_EXE }}
+          key: ${{ needs.publish_exe.outputs.cache_key }}
+          fail-on-cache-miss: true
+          enableCrossOsArchive: true
+
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            github_token=${{ secrets.READ_PACKAGES_TOKEN }}
+
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+            @semantic-release/github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Exclude in template
+#  publish_template:
+#    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.get_semantic_release_version.outputs.new_release_published == 'true'
+#    uses: ./.github/workflows/publish-template.yml
+#    needs: [ get_semantic_release_version, release ]
+#    with:
+#      release_version: ${{ needs.get_semantic_release_version.outputs.new_release_version }}
+#    secrets:
+#      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
