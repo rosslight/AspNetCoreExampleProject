@@ -1,0 +1,13 @@
+﻿<Project>
+  <Import Project="../Directory.Build.props" />
+  <PropertyGroup>
+    <RuntimeIdentifiers>win-x64;linux-arm64;linux-x64</RuntimeIdentifiers>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>
