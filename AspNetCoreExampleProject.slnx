@@ -3,8 +3,6 @@
     <Project Path="src/AspNetCoreExampleProject.Backend/AspNetCoreExampleProject.Backend.csproj" />
     <Project Path="src/AspNetCoreExampleProject.Client/AspNetCoreExampleProject.Client.csproj" />
     <Project Path="src/AspNetCoreExampleProject.Api/AspNetCoreExampleProject.Api.csproj" />
-
   </Folder>
-  <Folder Name="/test/">
-  </Folder>
+  <Folder Name="/test/"></Folder>
 </Solution>
