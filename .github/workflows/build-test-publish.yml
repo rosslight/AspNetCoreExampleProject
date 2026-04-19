@@ -13,6 +13,8 @@ env:
   PROJECT_PATH: "src/AspNetCoreExampleProject.Client/AspNetCoreExampleProject.Client.csproj"
   # Workflow-specific settings. Only change if there are conflicting filepaths
   ARTIFACT_PATH_EXE: "./publish_exe"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build_test:
