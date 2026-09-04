@@ -1,8 +1,8 @@
-using System.Text.Json;
-using AspNetCoreExampleProject.Api;
 using AspNetCoreExampleProject.Api.Responses.Health;
+using AspNetCoreExampleProject.Backend.Endpoints.ResponseExtensions.Health;
 using AspNetCoreExampleProject.Backend.Helpers;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace AspNetCoreExampleProject.Backend.Endpoints;
 
@@ -10,29 +10,21 @@ public static class HealthCheckEndpoint
 {
     public static void MapCustomHealthCheck(this WebApplication app)
     {
-        app.MapHealthChecks(
+        app.MapGet(
             "/health",
-            new HealthCheckOptions
+            async Task<Results<Ok<HealthCheckResponse>, InternalServerError<HealthCheckResponse>>> (
+                HealthCheckService healthCheckService,
+                IAppInformationService appInformationService,
+                CancellationToken ct
+            ) =>
             {
-                ResponseWriter = async (context, report) =>
-                {
-                    var appInformationService = app.Services.GetRequiredService<IAppInformationService>();
+                var report = await healthCheckService.CheckHealthAsync(ct);
 
-                    context.Response.ContentType = "application/json";
+                var response = report.ToHealthCheckResponse(appInformationService.Version);
 
-                    var response = new HealthCheckResponse
-                    {
-                        Status = report.Status.ToString(),
-                        Version = appInformationService.Version,
-                    };
-
-                    await context.Response.WriteAsync(
-                        JsonSerializer.Serialize(
-                            response,
-                            AspNetCoreExampleProjectJsonContext.Default.HealthCheckResponse
-                        )
-                    );
-                },
+                return report.Status == HealthStatus.Unhealthy
+                    ? TypedResults.InternalServerError(response)
+                    : TypedResults.Ok(response);
             }
         );
     }

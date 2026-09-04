@@ -20,6 +20,7 @@ namespace AspNetCoreExampleProject.Api;
 [JsonSerializable(typeof(CityListResponse))]
 [JsonSerializable(typeof(PersonListResponse))]
 [JsonSerializable(typeof(HealthCheckResponse))]
+[JsonSerializable(typeof(HealthCheckEntryResponse))]
 // Setup
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
